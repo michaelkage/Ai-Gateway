@@ -18,7 +18,7 @@ const DEFAULTS: Record<ProviderName, { baseUrl: string; model: string }> = {
   },
   groq: {
     baseUrl: "https://api.groq.com/openai/v1",
-    model: "llama-3.3-70b-versatile",
+    model: "openai/gpt-oss-120b",
   },
   openrouter: {
     baseUrl: "https://openrouter.ai/api/v1",
