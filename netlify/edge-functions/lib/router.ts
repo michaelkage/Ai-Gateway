@@ -1,4 +1,4 @@
-import type { ProviderConfig, ProviderName } from "./providers.ts";
+import type { ProviderConfig, ProviderName } from "./providers";
 
 interface ChatRequest {
   model?: unknown;
