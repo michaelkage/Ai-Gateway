@@ -1,9 +1,9 @@
-import { isAuthorized } from "./lib/auth.ts";
+import { isAuthorized } from "./lib/auth";
 import {
   getConfiguredProviders,
   type ProviderConfig,
-} from "./lib/providers.ts";
-import { forwardChatCompletion } from "./lib/router.ts";
+} from "./lib/providers";
+import { forwardChatCompletion } from "./lib/router";
 
 const CORS_HEADERS = {
   "access-control-allow-headers": "Authorization, Content-Type",
