@@ -14,44 +14,89 @@ AI Gateway
    |
    +-- OpenAI
    +-- Gemini
-   +-- Anthropic
    +-- Groq
    +-- OpenRouter
 ```
 
-The gateway is designed for an edge/serverless runtime rather than a persistent Node server, local SQLite database, or always-on personal computer.
+The gateway is designed for an edge/serverless runtime rather than a persistent Node server, local database, or always-on personal computer.
 
-## API contract
+## API
 
 The public API is intentionally OpenAI-compatible:
 
+- `GET /v1/health`
 - `GET /v1/models`
 - `POST /v1/chat/completions`
 
-The initial implementation establishes authentication, provider configuration, streaming-compatible pass-through, and retryable-provider fallback. Provider adapters and richer routing policies are being added incrementally.
+Authentication uses:
 
-## Security model
+```
+Authorization: Bearer <GATEWAY_API_KEY>
+```
 
-Provider API keys are deployment secrets/environment variables. They must never be committed to Git.
+Chat completions are streamed through unchanged when the client sends `"stream": true`.
 
-The client receives only:
+## Model routing
 
-- the gateway URL
-- one gateway authentication key
+Use `auto` for normal automatic fallback:
 
-Provider credentials remain server-side.
+```json
+{
+  "model": "auto",
+  "messages": [
+    { "role": "user", "content": "Hello" }
+  ]
+}
+```
+
+The gateway sends `auto` to providers in `PROVIDER_ORDER`, using each provider's configured default model.
+
+Provider-prefixed model names force a specific provider:
+
+- `openai/<model>`
+- `gemini/<model>`
+- `groq/<model>`
+- `openrouter/<model>`
+
+For example, OpenRouter models containing their own slash work as:
+
+```
+openrouter/<provider>/<model>
+```
+
+The `code` virtual model currently behaves like `auto` and is reserved for a future code-focused routing policy.
 
 ## Environment
 
 Copy `.env.example` to `.env` for local development.
 
-`PROVIDER_ORDER` controls the fallback order. Only configured providers are eligible.
-
-Example:
+Required:
 
 ```
-PROVIDER_ORDER=openai,groq,openrouter
+GATEWAY_API_KEY=...
 ```
+
+Configure any providers you want:
+
+```
+PROVIDER_ORDER=openai,gemini,groq,openrouter
+
+OPENAI_API_KEY=...
+OPENAI_MODEL=...
+
+GEMINI_API_KEY=...
+GEMINI_MODEL=...
+
+GROQ_API_KEY=...
+GROQ_MODEL=...
+
+OPENROUTER_API_KEY=...
+OPENROUTER_MODEL=...
+```
+
+Each provider also has an optional `*_BASE_URL` override.
+
+`UPSTREAM_TIMEOUT_MS` controls the maximum time allowed for one upstream request. The gateway defaults to 30 seconds and caps configured values at 120 seconds.
 
 ## Local development
 
@@ -79,22 +124,56 @@ Type-check:
 npm run typecheck
 ```
 
+Build:
+
+```bash
+npm run build
+```
+
 ## Deployment
 
-The repository is structured for Netlify Edge Functions. Connect the repository to Netlify and configure the secrets in Netlify's environment-variable settings.
+The repository is structured for Netlify Edge Functions.
 
-Do not put API keys in `netlify.toml`, source files, or committed `.env` files.
+1. Connect the GitHub repository to Netlify.
+2. Keep the build settings from `netlify.toml`.
+3. Add `GATEWAY_API_KEY` and provider API keys in Netlify environment variables.
+4. Deploy.
+5. Check `/v1/health`.
+6. Configure OpenCode with the gateway URL and gateway key.
+
+Never put provider API keys in `netlify.toml`, source files, or committed `.env` files.
+
+## OpenCode configuration concept
+
+Use the gateway as an OpenAI-compatible provider:
+
+```
+Base URL: https://<your-site>.netlify.app/v1
+API key: <your GATEWAY_API_KEY>
+Model: auto
+```
+
+The exact OpenCode configuration shape depends on the OpenCode version, so the gateway itself does not depend on a specific client configuration format.
+
+## Current safeguards
+
+- Gateway authentication
+- Provider secrets kept server-side
+- Request validation
+- Upstream request timeout
+- Retry/fallback on network errors, timeouts, 408, 409, 429, and 5xx responses
+- Provider-specific routing
+- CORS support
+- Health endpoint
+- CI typecheck/build validation
 
 ## Roadmap
 
-1. Gateway contract and authentication
-2. OpenAI-compatible provider adapter
-3. Streaming
-4. Automatic fallback/routing
-5. Gemini adapter
-6. Anthropic adapter
-7. Provider health and cooldown logic
-8. Virtual models such as `auto` and `code`
-9. Management UI
-10. Optional persistent configuration
-11. OpenCode integration tests
+1. Provider health/cooldown state
+2. Better upstream error propagation
+3. Anthropic adapter
+4. More explicit virtual routing policies
+5. Gateway key rotation
+6. OpenCode integration tests
+7. Optional management UI
+8. Optional persistent configuration
