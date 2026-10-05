@@ -1,33 +1,48 @@
 import { isAuthorized } from "./lib/auth.ts";
-import { getConfiguredProviders } from "./lib/providers.ts";
+import {
+  getConfiguredProviders,
+  type ProviderConfig,
+} from "./lib/providers.ts";
 import { forwardChatCompletion } from "./lib/router.ts";
 
+const CORS_HEADERS = {
+  "access-control-allow-headers": "Authorization, Content-Type",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-origin": "*",
+};
+
 export default async function handler(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
+
+  if (url.pathname === "/v1/health") {
+    return json(
+      {
+        status: "ok",
+        service: "ai-gateway",
+        providers_configured: getConfiguredProviders().length,
+      },
+      200,
+    );
+  }
+
   if (!isAuthorized(request)) {
-    return Response.json(
+    return json(
       {
         error: {
           message: "Unauthorized.",
           type: "authentication_error",
         },
       },
-      { status: 401 },
+      401,
     );
   }
 
-  const url = new URL(request.url);
-
   if (request.method === "GET" && url.pathname === "/v1/models") {
-    return Response.json({
-      object: "list",
-      data: [
-        {
-          id: "auto",
-          object: "model",
-          owned_by: "ai-gateway",
-        },
-      ],
-    });
+    return json(buildModelList(getConfiguredProviders()), 200);
   }
 
   if (request.method === "POST" && url.pathname === "/v1/chat/completions") {
@@ -36,29 +51,77 @@ export default async function handler(request: Request): Promise<Response> {
     try {
       body = await request.json();
     } catch {
-      return Response.json(
+      return json(
         {
           error: {
             message: "Request body must be valid JSON.",
             type: "invalid_request_error",
           },
         },
-        { status: 400 },
+        400,
       );
     }
 
-    return forwardChatCompletion(body, getConfiguredProviders());
+    return withCors(
+      await forwardChatCompletion(body, getConfiguredProviders()),
+    );
   }
 
-  return Response.json(
+  return json(
     {
       error: {
         message: "Endpoint not found.",
         type: "invalid_request_error",
       },
     },
-    { status: 404 },
+    404,
   );
+}
+
+function buildModelList(providers: ProviderConfig[]) {
+  const data = [
+    {
+      id: "auto",
+      object: "model",
+      owned_by: "ai-gateway",
+    },
+    {
+      id: "code",
+      object: "model",
+      owned_by: "ai-gateway",
+    },
+  ];
+
+  for (const provider of providers) {
+    data.push({
+      id: `${provider.name}/${provider.defaultModel}`,
+      object: "model",
+      owned_by: provider.name,
+    });
+  }
+
+  return {
+    object: "list",
+    data,
+  };
+}
+
+function json(body: unknown, status: number): Response {
+  return withCors(Response.json(body, { status }));
+}
+
+function withCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+
+  for (const [key, value] of Object.entries(CORS_HEADERS)) {
+    headers.set(key, value);
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 export const config = {
