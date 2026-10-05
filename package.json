@@ -1,0 +1,16 @@
+{
+  "name": "ai-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "netlify build",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@netlify/edge-bundler": "latest",
+    "netlify-cli": "latest",
+    "typescript": "latest"
+  }
+}
